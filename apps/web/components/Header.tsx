@@ -58,7 +58,7 @@ export function Header() {
         <Popover triggerClassName="icon-button" triggerLabel={<Icons.HamburgerIcon />}>
           {() => (
             <div className="sidebar-prefs-menu">
-              <p className="popover-title">Show in sidebar</p>
+              <p className="popover-title">Perspectives</p>
               {PERSPECTIVES.map((p) => (
                 <label key={p.key} className="checkbox-label">
                   <input
@@ -79,7 +79,7 @@ export function Header() {
           type="button"
           className="icon-button"
           onClick={shell.toggleSidebar}
-          title="Show/hide sidebar (Shift+S)"
+          title="Show or hide the sidebar (Shift+S)"
         >
           <Icons.SidebarIcon />
         </button>
@@ -87,7 +87,7 @@ export function Header() {
           type="button"
           className="icon-button"
           onClick={shell.toggleViewOptions}
-          title="View options (V)"
+          title="Change view options for the outline (V)"
         >
           <Icons.EyeIcon />
         </button>
