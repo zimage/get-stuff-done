@@ -1,0 +1,27 @@
+{
+  "name": "@gsd/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gsd/auth": "workspace:*",
+    "@gsd/db": "workspace:*",
+    "@gsd/domain": "workspace:*",
+    "@gsd/validation": "workspace:*",
+    "@trpc/server": "^11.0.0-rc.638",
+    "superjson": "^2.2.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@gsd/config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "fastify": "^5.2.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ActionStatus {
+  active
+  completed
+  dropped
+}
+
+enum ProjectStatus {
+  active
+  on_hold
+  completed
+  dropped
+}
+
+enum ProjectType {
+  parallel
+  sequential
+  single_actions
+}
+
+enum TagStatus {
+  active
+  on_hold
+  dropped
+}
+
+enum TagLocationType {
+  anywhere
+  address
+  coordinates
+}
+
+enum ReviewIntervalUnit {
+  day
+  week
+  month
+  year
+}
+
+enum RecurrenceFrequency {
+  minute
+  hour
+  day
+  week
+  month
+  year
+}
+
+enum RecurrenceSchedule {
+  regular
+  from_completion
+}
+
+enum RecurrenceBasedOn {
+  defer_date
+  planned_date
+  due_date
+}
+
+model Family {
+  id         String   @id @default(cuid())
+  name       String
+  inviteCode String   @unique @default(cuid())
+  createdAt  DateTime @default(now())
+
+  members User[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  googleSub String   @unique
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  familyId  String?
+  family    Family?  @relation(fields: [familyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refreshTokens   RefreshToken[]
+  ownedProjects   Project[]      @relation("ProjectOwner")
+  ownedFolders    Folder[]       @relation("FolderOwner")
+  projectShares   ProjectShare[]
+  createdActions  Action[]       @relation("ActionCreator")
+  assignedActions Action[]       @relation("ActionAssignee")
+  tags            Tag[]
+  attachments     Attachment[]   @relation("AttachmentUploader")
+
+  @@index([familyId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Project {
+  id                  String              @id @default(cuid())
+  title               String
+  status              ProjectStatus       @default(active)
+  type                ProjectType         @default(parallel)
+  flagged             Boolean             @default(false)
+  deferredDate        DateTime?
+  dueDate             DateTime?
+  reviewDate          DateTime?
+  reviewIntervalCount Int?
+  reviewIntervalUnit  ReviewIntervalUnit?
+  lastReviewedAt      DateTime?
+  note                String?
+  folderId            String?
+  folder              Folder?             @relation(fields: [folderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  ownerId             String
+  owner               User                @relation("ProjectOwner", fields: [ownerId], references: [id])
+  actions             Action[]
+  tags                ProjectTag[]
+  attachments         Attachment[]
+  shares              ProjectShare[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([ownerId, status])
+  @@index([reviewDate])
+  @@index([folderId])
+}
+
+model Folder {
+  id             String   @id @default(cuid())
+  title          String
+  parentFolderId String?
+  parentFolder   Folder?  @relation("FolderParent", fields: [parentFolderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  childFolders   Folder[] @relation("FolderParent")
+  sortOrder      Int      @default(0)
+  ownerId        String
+  owner          User     @relation("FolderOwner", fields: [ownerId], references: [id])
+  projects       Project[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([parentFolderId])
+}
+
+model ProjectShare {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
+
+model Action {
+  id             String    @id @default(cuid())
+  title          String
+  note           String?
+  projectId      String?
+  project        Project?  @relation(fields: [projectId], references: [id])
+  parentActionId String?
+  parent         Action?   @relation("ActionParent", fields: [parentActionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  children       Action[]  @relation("ActionParent")
+  status         ActionStatus @default(active)
+  flagged        Boolean      @default(false)
+  deferredDate   DateTime?
+  plannedDate    DateTime?
+  dueDate        DateTime?
+  sortOrder      Int          @default(0)
+
+  repeats                        Boolean               @default(false)
+  recurrenceInterval              Int?
+  recurrenceFrequency             RecurrenceFrequency?
+  recurrenceSchedule              RecurrenceSchedule?
+  recurrenceCatchUpAutomatically  Boolean               @default(false)
+  recurrenceBasedOn               RecurrenceBasedOn?
+  previousOccurrenceId            String?               @unique
+  previousOccurrence              Action?               @relation("ActionRecurrence", fields: [previousOccurrenceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  nextOccurrence                  Action?               @relation("ActionRecurrence")
+
+  createdById  String
+  createdBy    User      @relation("ActionCreator", fields: [createdById], references: [id])
+  assignedToId String?
+  assignedTo   User?     @relation("ActionAssignee", fields: [assignedToId], references: [id])
+
+  tags        ActionTag[]
+  attachments Attachment[]
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([createdById, status])
+  @@index([assignedToId])
+  @@index([parentActionId])
+}
+
+model Tag {
+  id           String           @id @default(cuid())
+  title        String
+  status       TagStatus        @default(active)
+  locationType TagLocationType  @default(anywhere)
+  address      String?
+  lat          Float?
+  lng          Float?
+  geocodedAt   DateTime?
+  ownerId      String
+  owner        User             @relation(fields: [ownerId], references: [id])
+  actions      ActionTag[]
+  projects     ProjectTag[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([ownerId])
+  @@index([lat, lng])
+}
+
+model ActionTag {
+  actionId  String
+  action    Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([actionId, tagId])
+}
+
+model ProjectTag {
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([projectId, tagId])
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  actionId     String?
+  action       Action?  @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String
+  uploadedById String
+  uploadedBy   User     @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([actionId])
+  @@index([projectId])
+}

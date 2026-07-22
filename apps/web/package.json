@@ -1,0 +1,31 @@
+{
+  "name": "@gsd/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gsd/api": "workspace:*",
+    "@gsd/validation": "workspace:*",
+    "@react-oauth/google": "^0.12.1",
+    "@tanstack/react-query": "^5.62.7",
+    "@trpc/client": "^11.0.0-rc.638",
+    "@trpc/react-query": "^11.0.0-rc.638",
+    "@trpc/server": "^11.0.0-rc.638",
+    "next": "^15.1.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "superjson": "^2.2.2"
+  },
+  "devDependencies": {
+    "@gsd/config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "typescript": "^5.7.2"
+  }
+}
