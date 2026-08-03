@@ -11,6 +11,8 @@ export interface TagEditValue {
   address: string | null;
   lat: number | null;
   lng: number | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export function TagEditForm({ tag, onSaved }: { tag: TagEditValue; onSaved: () => void }) {
@@ -81,6 +83,9 @@ export function TagEditForm({ tag, onSaved }: { tag: TagEditValue; onSaved: () =
           </label>
         </div>
       )}
+
+      <p className="form-hint">Created {tag.createdAt.toLocaleString()}</p>
+      <p className="form-hint">Last changed {tag.updatedAt.toLocaleString()}</p>
 
       {updateMutation.error && <p className="form-error">{updateMutation.error.message}</p>}
 

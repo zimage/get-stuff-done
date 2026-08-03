@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type DragEvent } from "react";
 import { Popover } from "../../components/Popover";
 import * as Icons from "../../components/icons";
+import { getDragPayload, setDragPayload } from "../../lib/dragDrop";
 import { useShellState } from "../../lib/ShellStateProvider";
+import { useStatusMessage } from "../../lib/StatusMessageProvider";
 import { trpc } from "../../lib/trpc";
 import type { FolderListItem, ProjectListItem } from "../../lib/types";
-
-const STATUS_OPTIONS = ["active", "on_hold", "completed", "dropped"] as const;
-type StatusFilter = "all" | (typeof STATUS_OPTIONS)[number];
 
 function currentFolderIdFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/projects\/folders\/([^/]+)/);
@@ -22,19 +21,28 @@ export function ProjectsContextSidebar() {
   const router = useRouter();
   const shell = useShellState();
   const utils = trpc.useUtils();
+  const { setMessage } = useStatusMessage();
 
-  const [status, setStatus] = useState<StatusFilter>("active");
-  const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [dragOverRoot, setDragOverRoot] = useState(false);
 
-  const foldersQuery = trpc.folders.list.useQuery();
+  const foldersQuery = trpc.folders.list.useQuery({});
   const projectsQuery = trpc.projects.list.useQuery({
-    status: status === "all" ? undefined : status,
-    flagged: flaggedOnly ? true : undefined,
+    status: shell.projectFilters.status === "all" ? undefined : shell.projectFilters.status,
+    flagged: shell.projectFilters.flaggedOnly ? true : undefined,
   });
 
   const createProjectMutation = trpc.projects.create.useMutation();
   const createFolderMutation = trpc.folders.create.useMutation();
+  const updateProjectMutation = trpc.projects.update.useMutation({
+    onSuccess: () => utils.projects.list.invalidate(),
+    onError: (error) => setMessage(error.message),
+  });
+  const updateFolderMutation = trpc.folders.update.useMutation({
+    onSuccess: () => utils.folders.list.invalidate(),
+    onError: (error) => setMessage(error.message),
+  });
 
   const folders = foldersQuery.data ?? [];
   const projects = projectsQuery.data ?? [];
@@ -90,6 +98,41 @@ export function ProjectsContextSidebar() {
     router.push(`/projects/folders/${folder.id}?focusTitle=1`);
   }
 
+  function moveToFolder(payloadKind: "project" | "folder", id: string, folderId: string | null) {
+    if (payloadKind === "project") {
+      updateProjectMutation.mutate({ id, folderId });
+    } else {
+      updateFolderMutation.mutate({ id, parentFolderId: folderId });
+    }
+  }
+
+  function handleDropOnFolder(folder: FolderListItem, event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOverFolderId(null);
+    const payload = getDragPayload(event);
+    if (!payload || payload.kind === "tag") return;
+    if (payload.kind === "folder" && payload.id === folder.id) return;
+    moveToFolder(payload.kind, payload.id, folder.id);
+  }
+
+  function handleDropNearProject(project: ProjectListItem, event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    const payload = getDragPayload(event);
+    if (!payload || payload.kind === "tag") return;
+    if (payload.kind === "project" && payload.id === project.id) return;
+    moveToFolder(payload.kind, payload.id, project.folderId);
+  }
+
+  function handleDropOnRoot(event: DragEvent) {
+    event.preventDefault();
+    setDragOverRoot(false);
+    const payload = getDragPayload(event);
+    if (!payload || payload.kind === "tag") return;
+    moveToFolder(payload.kind, payload.id, null);
+  }
+
   function renderFolder(folder: FolderListItem): React.ReactNode {
     const isCollapsed = collapsedFolderIds.has(folder.id);
     const childFolders = foldersByParent.get(folder.id) ?? [];
@@ -98,7 +141,18 @@ export function ProjectsContextSidebar() {
 
     return (
       <div key={folder.id}>
-        <div className="folder-tree-item">
+        <div
+          className={`folder-tree-item ${dragOverFolderId === folder.id ? "drop-target-active" : ""}`}
+          draggable
+          onDragStart={(event) => setDragPayload(event, { kind: "folder", id: folder.id })}
+          onDragOver={(event) => event.preventDefault()}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragOverFolderId(folder.id);
+          }}
+          onDragLeave={() => setDragOverFolderId((current) => (current === folder.id ? null : current))}
+          onDrop={(event) => handleDropOnFolder(folder, event)}
+        >
           <button className="folder-tree-toggle" onClick={() => toggleFolder(folder.id)}>
             {isCollapsed ? "▸" : "▾"}
           </button>
@@ -126,6 +180,10 @@ export function ProjectsContextSidebar() {
         key={project.id}
         href={`/projects/${project.id}`}
         className={`tree-link ${isActive ? "tree-link-active" : ""}`}
+        draggable
+        onDragStart={(event) => setDragPayload(event, { kind: "project", id: project.id })}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => handleDropNearProject(project, event)}
       >
         {project.flagged ? "⚑ " : ""}
         {project.title}
@@ -140,29 +198,16 @@ export function ProjectsContextSidebar() {
 
   return (
     <div className="context-sidebar">
-      {shell.viewOptionsVisible && (
-        <div className="context-sidebar-view-options">
-          <p className="popover-title">View options</p>
-          <select value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)}>
-            <option value="all">All statuses</option>
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={flaggedOnly}
-              onChange={(event) => setFlaggedOnly(event.target.checked)}
-            />
-            Flagged only
-          </label>
-        </div>
-      )}
-
-      <div className="context-sidebar-list">
+      <div
+        className={`context-sidebar-list ${dragOverRoot ? "drop-target-active" : ""}`}
+        onDragOver={(event) => event.preventDefault()}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragOverRoot(true);
+        }}
+        onDragLeave={() => setDragOverRoot(false)}
+        onDrop={handleDropOnRoot}
+      >
         {foldersQuery.isLoading || projectsQuery.isLoading ? <p>Loading…</p> : null}
         {rootFolders.map(renderFolder)}
         {rootProjects.map(renderProject)}

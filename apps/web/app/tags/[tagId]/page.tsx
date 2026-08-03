@@ -2,10 +2,8 @@
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ActionEditForm } from "../../../components/ActionEditForm";
 import { ActionRow } from "../../../components/ActionRow";
-import { Modal } from "../../../components/Modal";
-import { TagEditForm } from "../../../components/TagEditForm";
+import { useShellState } from "../../../lib/ShellStateProvider";
 import { trpc } from "../../../lib/trpc";
 
 export default function TagDetailPage() {
@@ -14,6 +12,7 @@ export default function TagDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldFocusTitle = searchParams.get("focusTitle") === "1";
+  const { select } = useShellState();
 
   const utils = trpc.useUtils();
   const tagsQuery = trpc.tags.list.useQuery({});
@@ -31,13 +30,16 @@ export default function TagDetailPage() {
   });
 
   const [title, setTitle] = useState("");
-  const [editing, setEditing] = useState(false);
-  const [editingActionId, setEditingActionId] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (tag) setTitle(tag.title);
   }, [tag?.title]);
+
+  // Viewing a tag's detail page makes it the Inspector's selection.
+  useEffect(() => {
+    select({ type: "tag", id: tagId });
+  }, [tagId, select]);
 
   useEffect(() => {
     if (shouldFocusTitle && titleInputRef.current) {
@@ -54,8 +56,6 @@ export default function TagDetailPage() {
       updateMutation.mutate({ id: tagId, title: trimmed });
     }
   }
-
-  const editingAction = actionsQuery.data?.find((action) => action.id === editingActionId);
 
   if (tagsQuery.isLoading) {
     return (
@@ -86,7 +86,6 @@ export default function TagDetailPage() {
           }}
         />
         <div className="detail-pane-actions">
-          <button onClick={() => setEditing(true)}>Edit</button>
           <button
             onClick={() => {
               if (confirm(`Delete tag "${tag.title}"? This removes it from any tagged actions.`)) {
@@ -106,35 +105,11 @@ export default function TagDetailPage() {
           <ActionRow
             key={action.id}
             action={action}
-            onEdit={setEditingActionId}
+            onEdit={(id) => select({ type: "action", id })}
             onChanged={invalidateActions}
           />
         ))}
       </ul>
-
-      {editing && (
-        <Modal title="Edit tag" onClose={() => setEditing(false)}>
-          <TagEditForm
-            tag={tag}
-            onSaved={() => {
-              utils.tags.list.invalidate();
-              setEditing(false);
-            }}
-          />
-        </Modal>
-      )}
-
-      {editingAction && (
-        <Modal title="Edit action" onClose={() => setEditingActionId(null)}>
-          <ActionEditForm
-            action={editingAction}
-            onSaved={() => {
-              invalidateActions();
-              setEditingActionId(null);
-            }}
-          />
-        </Modal>
-      )}
     </div>
   );
 }

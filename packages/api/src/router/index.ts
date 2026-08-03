@@ -1,5 +1,6 @@
 import { router } from "../trpc.js";
 import { actionsRouter } from "./actions.js";
+import { apiTokensRouter } from "./apiTokens.js";
 import { authRouter } from "./auth.js";
 import { foldersRouter } from "./folders.js";
 import { projectsRouter } from "./projects.js";
@@ -11,6 +12,7 @@ export const appRouter = router({
   projects: projectsRouter,
   tags: tagsRouter,
   folders: foldersRouter,
+  apiTokens: apiTokensRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ActionEditForm } from "../components/ActionEditForm";
 import { ActionRow } from "../components/ActionRow";
-import { Modal } from "../components/Modal";
+import { useShellState } from "../lib/ShellStateProvider";
 import { trpc } from "../lib/trpc";
 
 export default function InboxPage() {
   const utils = trpc.useUtils();
+  const { select } = useShellState();
 
   const actionsQuery = trpc.actions.list.useQuery({ projectId: null, status: "active" });
   const invalidateActions = () => utils.actions.list.invalidate();
@@ -15,7 +15,6 @@ export default function InboxPage() {
   const createMutation = trpc.actions.create.useMutation({ onSuccess: invalidateActions });
 
   const [title, setTitle] = useState("");
-  const [editingActionId, setEditingActionId] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -24,8 +23,6 @@ export default function InboxPage() {
     createMutation.mutate({ title: trimmed });
     setTitle("");
   }
-
-  const editingAction = actionsQuery.data?.find((action) => action.id === editingActionId);
 
   return (
     <main className="inbox">
@@ -53,23 +50,11 @@ export default function InboxPage() {
           <ActionRow
             key={action.id}
             action={action}
-            onEdit={setEditingActionId}
+            onEdit={(id) => select({ type: "action", id })}
             onChanged={invalidateActions}
           />
         ))}
       </ul>
-
-      {editingAction && (
-        <Modal title="Edit action" onClose={() => setEditingActionId(null)}>
-          <ActionEditForm
-            action={editingAction}
-            onSaved={() => {
-              invalidateActions();
-              setEditingActionId(null);
-            }}
-          />
-        </Modal>
-      )}
     </main>
   );
 }

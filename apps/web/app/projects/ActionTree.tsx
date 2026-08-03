@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import { ActionEditForm, type ActionEditValue } from "../../components/ActionEditForm";
-import { Modal } from "../../components/Modal";
+import { useMemo, type ReactNode } from "react";
+import type { ActionEditValue } from "../../components/ActionEditForm";
 import { useShellState } from "../../lib/ShellStateProvider";
 import { trpc } from "../../lib/trpc";
 
@@ -19,8 +18,7 @@ export function ActionTree({
 }) {
   const utils = trpc.useUtils();
   const invalidate = () => utils.projects.get.invalidate({ id: projectId });
-  const [editingActionId, setEditingActionId] = useState<string | null>(null);
-  const { hideCompletedInTree } = useShellState();
+  const { hideCompletedInTree, select } = useShellState();
 
   const completeMutation = trpc.actions.complete.useMutation({ onSuccess: invalidate });
   const dropMutation = trpc.actions.drop.useMutation({ onSuccess: invalidate });
@@ -51,7 +49,7 @@ export function ActionTree({
             <div className="action-row">
               <button
                 className={`link-button ${actionableActionIds.has(action.id) ? "action-actionable" : "action-blocked"}`}
-                onClick={() => setEditingActionId(action.id)}
+                onClick={() => select({ type: "action", id: action.id })}
               >
                 {action.title}
               </button>
@@ -72,22 +70,6 @@ export function ActionTree({
   }
 
   const tree = renderGroup(null);
-  const editingAction = actions.find((action) => action.id === editingActionId);
 
-  return (
-    <>
-      {tree ?? <p className="empty-hint">No actions yet.</p>}
-      {editingAction && (
-        <Modal title="Edit action" onClose={() => setEditingActionId(null)}>
-          <ActionEditForm
-            action={editingAction}
-            onSaved={() => {
-              invalidate();
-              setEditingActionId(null);
-            }}
-          />
-        </Modal>
-      )}
-    </>
-  );
+  return tree ?? <p className="empty-hint">No actions yet.</p>;
 }

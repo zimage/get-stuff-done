@@ -2,8 +2,7 @@
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Modal } from "../../../components/Modal";
-import { ProjectEditForm } from "../../../components/ProjectEditForm";
+import { useShellState } from "../../../lib/ShellStateProvider";
 import { trpc } from "../../../lib/trpc";
 import { ActionTree } from "../ActionTree";
 
@@ -13,6 +12,7 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldFocusTitle = searchParams.get("focusTitle") === "1";
+  const { select } = useShellState();
 
   const utils = trpc.useUtils();
   const detailQuery = trpc.projects.get.useQuery({ id: projectId });
@@ -36,12 +36,16 @@ export default function ProjectDetailPage() {
   });
 
   const [title, setTitle] = useState("");
-  const [editing, setEditing] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (detailQuery.data) setTitle(detailQuery.data.project.title);
   }, [detailQuery.data?.project.title]);
+
+  // Viewing a project's detail page makes it the Inspector's selection.
+  useEffect(() => {
+    select({ type: "project", id: projectId });
+  }, [projectId, select]);
 
   useEffect(() => {
     if (shouldFocusTitle && titleInputRef.current) {
@@ -96,7 +100,6 @@ export default function ProjectDetailPage() {
           >
             Mark reviewed
           </button>
-          <button onClick={() => setEditing(true)}>Edit</button>
           <button
             onClick={() => {
               if (confirm(`Delete project "${project.title}"? Its actions move to the Inbox.`)) {
@@ -114,19 +117,6 @@ export default function ProjectDetailPage() {
         actionableActionIds={new Set(actionableActionIds)}
         projectId={project.id}
       />
-
-      {editing && (
-        <Modal title="Edit project" onClose={() => setEditing(false)}>
-          <ProjectEditForm
-            project={project}
-            onSaved={() => {
-              utils.projects.get.invalidate({ id: projectId });
-              utils.projects.list.invalidate();
-              setEditing(false);
-            }}
-          />
-        </Modal>
-      )}
     </div>
   );
 }

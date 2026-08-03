@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ActionEditForm } from "../../components/ActionEditForm";
 import { ActionRow } from "../../components/ActionRow";
-import { Modal } from "../../components/Modal";
+import { useShellState } from "../../lib/ShellStateProvider";
 import { trpc } from "../../lib/trpc";
 import type { ActionListItem } from "../../lib/types";
 
@@ -32,11 +30,9 @@ function dateLabelFor(action: ActionListItem): string {
 
 export default function ForecastPage() {
   const utils = trpc.useUtils();
-  const actionsQuery = trpc.actions.calendar.useQuery();
+  const { select } = useShellState();
+  const actionsQuery = trpc.actions.calendar.useQuery({});
   const invalidateActions = () => utils.actions.calendar.invalidate();
-
-  const [editingActionId, setEditingActionId] = useState<string | null>(null);
-  const editingAction = actionsQuery.data?.find((action) => action.id === editingActionId);
 
   const groups: { heading: string; actions: ActionListItem[] }[] = [];
   for (const action of actionsQuery.data ?? []) {
@@ -67,7 +63,7 @@ export default function ForecastPage() {
               <ActionRow
                 key={action.id}
                 action={action}
-                onEdit={setEditingActionId}
+                onEdit={(id) => select({ type: "action", id })}
                 onChanged={invalidateActions}
                 dateLabel={dateLabelFor(action)}
               />
@@ -75,18 +71,6 @@ export default function ForecastPage() {
           </ul>
         </section>
       ))}
-
-      {editingAction && (
-        <Modal title="Edit action" onClose={() => setEditingActionId(null)}>
-          <ActionEditForm
-            action={editingAction}
-            onSaved={() => {
-              invalidateActions();
-              setEditingActionId(null);
-            }}
-          />
-        </Modal>
-      )}
     </main>
   );
 }

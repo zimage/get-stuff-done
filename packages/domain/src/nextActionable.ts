@@ -6,8 +6,12 @@ import type { ActionNode, ProjectType } from "./types.js";
  * An action is eligible at all only if it's active, not deferred into the
  * future, and every ancestor (via parentActionId) is itself active — a
  * dropped/completed parent moots its children regardless of their own dates.
- * Within each sibling group, `sequential` projects surface only the lowest
- * sortOrder eligible sibling; `parallel`/`single_actions` surface all of them.
+ * Within each sibling group, `sequential` surfaces only the lowest sortOrder
+ * eligible sibling; `parallel`/`single_actions` surface all of them. The
+ * top-level group (parentActionId null) is governed by the project's own
+ * type; every nested group is governed by its immediate parent action's own
+ * `type` instead — each parent action configures its own children
+ * independently of the project and of any other ancestor.
  */
 export function computeActionable(
   actions: ActionNode[],
@@ -21,6 +25,11 @@ export function computeActionable(
     const list = childrenByParent.get(action.parentActionId) ?? [];
     list.push(action);
     childrenByParent.set(action.parentActionId, list);
+  }
+
+  function groupType(parentActionId: string | null): ProjectType {
+    if (parentActionId === null) return projectType;
+    return byId.get(parentActionId)?.type ?? "parallel";
   }
 
   function ancestorsActive(action: ActionNode): boolean {
@@ -42,11 +51,11 @@ export function computeActionable(
   }
 
   const result = new Set<string>();
-  for (const siblings of childrenByParent.values()) {
+  for (const [parentActionId, siblings] of childrenByParent.entries()) {
     const eligible = siblings.filter(isEligible);
     if (eligible.length === 0) continue;
 
-    if (projectType === "sequential") {
+    if (groupType(parentActionId) === "sequential") {
       const next = eligible.reduce((min, a) => (a.sortOrder < min.sortOrder ? a : min));
       result.add(next.id);
     } else {

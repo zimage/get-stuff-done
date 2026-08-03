@@ -10,6 +10,7 @@ function action(overrides: Partial<ActionNode> & { id: string }): ActionNode {
     status: "active",
     deferredDate: null,
     sortOrder: 0,
+    type: "parallel",
     ...overrides,
   };
 }
@@ -64,14 +65,35 @@ describe("computeActionable", () => {
     expect(computeActionable(actions, "parallel", NOW)).toEqual(new Set());
   });
 
-  it("recurses per sibling group so nested sequential checklists surface one leaf", () => {
+  it("recurses per sibling group, using each parent action's own type for its children", () => {
     const actions = [
-      action({ id: "top", sortOrder: 0 }),
+      action({ id: "top", sortOrder: 0, type: "sequential" }),
       action({ id: "child-a", parentActionId: "top", sortOrder: 0 }),
       action({ id: "child-b", parentActionId: "top", sortOrder: 1 }),
     ];
-    // "top" itself has no siblings so it's actionable; within its children,
-    // sequential ordering picks only child-a.
-    expect(computeActionable(actions, "sequential", NOW)).toEqual(new Set(["top", "child-a"]));
+    // "top" itself has no siblings so it's actionable; its own type governs
+    // its children, picking only child-a.
+    expect(computeActionable(actions, "parallel", NOW)).toEqual(new Set(["top", "child-a"]));
+  });
+
+  it("a parent action's own sequential type applies even in a parallel project", () => {
+    const actions = [
+      action({ id: "top", type: "sequential" }),
+      action({ id: "child-a", parentActionId: "top", sortOrder: 0 }),
+      action({ id: "child-b", parentActionId: "top", sortOrder: 1 }),
+    ];
+    expect(computeActionable(actions, "parallel", NOW)).toEqual(new Set(["top", "child-a"]));
+  });
+
+  it("a parent action's own parallel type applies even in a sequential project", () => {
+    const actions = [
+      action({ id: "top", type: "parallel" }),
+      action({ id: "child-a", parentActionId: "top", sortOrder: 0 }),
+      action({ id: "child-b", parentActionId: "top", sortOrder: 1 }),
+    ];
+    // The project is sequential, so only "top" (the sole top-level action)
+    // would matter there — but its children are governed by its own
+    // (parallel) type, surfacing both.
+    expect(computeActionable(actions, "sequential", NOW)).toEqual(new Set(["top", "child-a", "child-b"]));
   });
 });

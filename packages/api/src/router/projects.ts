@@ -7,7 +7,15 @@ import {
   computeNextReviewDate,
   visibleProjectsWhere,
 } from "@gsd/domain";
-import { createProjectInputSchema, projectStatusSchema, updateProjectInputSchema } from "@gsd/validation";
+import {
+  createProjectInputSchema,
+  projectDetailOutputSchema,
+  projectListItemOutputSchema,
+  projectOutputSchema,
+  projectStatusSchema,
+  successOutputSchema,
+  updateProjectInputSchema,
+} from "@gsd/validation";
 import { z } from "zod";
 import type { Context } from "../context.js";
 import { protectedProcedure, router } from "../trpc.js";
@@ -24,23 +32,23 @@ async function assertFolderIsWritable(ctx: AuthedContext, folderId: string) {
 
 export const projectsRouter = router({
   list: protectedProcedure
+    .meta({ openapi: { method: "GET", path: "/projects", tags: ["projects"], protect: true } })
     .input(
-      z
-        .object({
-          status: projectStatusSchema.optional(),
-          flagged: z.boolean().optional(),
-          // Projects with a reviewDate in the past — for the Review tab.
-          // Restricted to active/on_hold projects unless a status filter is
-          // explicitly given (a completed/dropped project doesn't need review).
-          dueForReview: z.boolean().optional(),
-        })
-        .optional(),
+      z.object({
+        status: projectStatusSchema.optional(),
+        flagged: z.boolean().optional(),
+        // Projects with a reviewDate in the past — for the Review tab.
+        // Restricted to active/on_hold projects unless a status filter is
+        // explicitly given (a completed/dropped project doesn't need review).
+        dueForReview: z.boolean().optional(),
+      }),
     )
+    .output(z.array(projectListItemOutputSchema))
     .query(async ({ ctx, input }) => {
       const where: Record<string, unknown> = { ...visibleProjectsWhere(ctx.user.id) };
-      if (input?.status) where.status = input.status;
-      if (input?.flagged !== undefined) where.flagged = input.flagged;
-      if (input?.dueForReview) {
+      if (input.status) where.status = input.status;
+      if (input.flagged !== undefined) where.flagged = input.flagged;
+      if (input.dueForReview) {
         where.reviewDate = { lte: new Date() };
         if (!input.status) where.status = { in: ["active", "on_hold"] };
       }
@@ -55,76 +63,96 @@ export const projectsRouter = router({
       });
     }),
 
-  get: protectedProcedure.input(idInput).query(async ({ ctx, input }) => {
-    const project = await ctx.prisma.project.findFirst({
-      where: { id: input.id, ...visibleProjectsWhere(ctx.user.id) },
-      include: { tags: { include: { tag: true } } },
-    });
-    if (!project) throw new TRPCError({ code: "NOT_FOUND" });
+  get: protectedProcedure
+    .meta({ openapi: { method: "GET", path: "/projects/{id}", tags: ["projects"], protect: true } })
+    .input(idInput)
+    .output(projectDetailOutputSchema)
+    .query(async ({ ctx, input }) => {
+      const project = await ctx.prisma.project.findFirst({
+        where: { id: input.id, ...visibleProjectsWhere(ctx.user.id) },
+        include: { tags: { include: { tag: true } } },
+      });
+      if (!project) throw new TRPCError({ code: "NOT_FOUND" });
 
-    const actions = await ctx.prisma.action.findMany({
-      where: { projectId: project.id },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-      include: { tags: { include: { tag: true } } },
-    });
+      const actions = await ctx.prisma.action.findMany({
+        where: { projectId: project.id },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        include: { tags: { include: { tag: true } } },
+      });
 
-    const actionableActionIds = Array.from(computeActionable(actions, project.type));
+      const actionableActionIds = Array.from(computeActionable(actions, project.type));
 
-    return { project, actions, actionableActionIds };
-  }),
+      return { project, actions, actionableActionIds };
+    }),
 
-  create: protectedProcedure.input(createProjectInputSchema).mutation(async ({ ctx, input }) => {
-    const { tagIds, ...data } = input;
-    if (data.folderId) await assertFolderIsWritable(ctx, data.folderId);
+  create: protectedProcedure
+    .meta({ openapi: { method: "POST", path: "/projects", tags: ["projects"], protect: true } })
+    .input(createProjectInputSchema)
+    .output(projectOutputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { tagIds, ...data } = input;
+      if (data.folderId) await assertFolderIsWritable(ctx, data.folderId);
 
-    return ctx.prisma.project.create({
-      data: {
-        ...data,
-        ownerId: ctx.user.id,
-        tags: tagIds.length ? { create: tagIds.map((tagId) => ({ tagId })) } : undefined,
-      },
-      include: { tags: { include: { tag: true } } },
-    });
-  }),
+      return ctx.prisma.project.create({
+        data: {
+          ...data,
+          ownerId: ctx.user.id,
+          tags: tagIds.length ? { create: tagIds.map((tagId) => ({ tagId })) } : undefined,
+        },
+        include: { tags: { include: { tag: true } } },
+      });
+    }),
 
-  update: protectedProcedure.input(updateProjectInputSchema).mutation(async ({ ctx, input }) => {
-    const { id, tagIds, ...data } = input;
-    const existing = await ctx.prisma.project.findUnique({ where: { id } });
-    if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
-    if (!canWriteProject(existing, ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN" });
-    if (data.folderId !== undefined && data.folderId !== null) await assertFolderIsWritable(ctx, data.folderId);
+  update: protectedProcedure
+    .meta({ openapi: { method: "PATCH", path: "/projects/{id}", tags: ["projects"], protect: true } })
+    .input(updateProjectInputSchema)
+    .output(projectOutputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { id, tagIds, ...data } = input;
+      const existing = await ctx.prisma.project.findUnique({ where: { id } });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!canWriteProject(existing, ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN" });
+      if (data.folderId !== undefined && data.folderId !== null) await assertFolderIsWritable(ctx, data.folderId);
 
-    return ctx.prisma.project.update({
-      where: { id },
-      data: {
-        ...data,
-        ...(tagIds ? { tags: { deleteMany: {}, create: tagIds.map((tagId) => ({ tagId })) } } : {}),
-      },
-      include: { tags: { include: { tag: true } } },
-    });
-  }),
+      return ctx.prisma.project.update({
+        where: { id },
+        data: {
+          ...data,
+          ...(tagIds ? { tags: { deleteMany: {}, create: tagIds.map((tagId) => ({ tagId })) } } : {}),
+        },
+        include: { tags: { include: { tag: true } } },
+      });
+    }),
 
-  delete: protectedProcedure.input(idInput).mutation(async ({ ctx, input }) => {
-    const existing = await ctx.prisma.project.findUnique({ where: { id: input.id } });
-    if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
-    if (!canWriteProject(existing, ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN" });
+  delete: protectedProcedure
+    .meta({ openapi: { method: "DELETE", path: "/projects/{id}", tags: ["projects"], protect: true } })
+    .input(idInput)
+    .output(successOutputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.prisma.project.findUnique({ where: { id: input.id } });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!canWriteProject(existing, ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN" });
 
-    await ctx.prisma.project.delete({ where: { id: input.id } });
-    return { success: true };
-  }),
+      await ctx.prisma.project.delete({ where: { id: input.id } });
+      return { success: true };
+    }),
 
-  markReviewed: protectedProcedure.input(idInput).mutation(async ({ ctx, input }) => {
-    const existing = await ctx.prisma.project.findUnique({ where: { id: input.id } });
-    if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
-    if (!canReviewProject(existing, ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN" });
+  markReviewed: protectedProcedure
+    .meta({ openapi: { method: "POST", path: "/projects/{id}/mark-reviewed", tags: ["projects"], protect: true } })
+    .input(idInput)
+    .output(projectOutputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.prisma.project.findUnique({ where: { id: input.id } });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!canReviewProject(existing, ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN" });
 
-    const reviewedAt = new Date();
-    const reviewDate = computeNextReviewDate(reviewedAt, existing.reviewIntervalCount, existing.reviewIntervalUnit);
+      const reviewedAt = new Date();
+      const reviewDate = computeNextReviewDate(reviewedAt, existing.reviewIntervalCount, existing.reviewIntervalUnit);
 
-    return ctx.prisma.project.update({
-      where: { id: input.id },
-      data: { lastReviewedAt: reviewedAt, reviewDate },
-      include: { tags: { include: { tag: true } } },
-    });
-  }),
+      return ctx.prisma.project.update({
+        where: { id: input.id },
+        data: { lastReviewedAt: reviewedAt, reviewDate },
+        include: { tags: { include: { tag: true } } },
+      });
+    }),
 });

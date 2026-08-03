@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useShellState } from "../../../../lib/ShellStateProvider";
 import { trpc } from "../../../../lib/trpc";
 
 export default function FolderDetailPage() {
@@ -11,9 +12,10 @@ export default function FolderDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldFocusTitle = searchParams.get("focusTitle") === "1";
+  const { select } = useShellState();
 
   const utils = trpc.useUtils();
-  const foldersQuery = trpc.folders.list.useQuery();
+  const foldersQuery = trpc.folders.list.useQuery({});
   const projectsQuery = trpc.projects.list.useQuery({});
 
   const updateMutation = trpc.folders.update.useMutation({
@@ -35,6 +37,11 @@ export default function FolderDetailPage() {
   useEffect(() => {
     if (folder) setTitle(folder.title);
   }, [folder?.title]);
+
+  // Folders aren't editable in the Inspector — viewing one clears the selection.
+  useEffect(() => {
+    select(null);
+  }, [folderId, select]);
 
   useEffect(() => {
     if (shouldFocusTitle && titleInputRef.current) {

@@ -1,18 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { ActionEditForm } from "../../components/ActionEditForm";
 import { ActionRow } from "../../components/ActionRow";
-import { Modal } from "../../components/Modal";
+import { useShellState } from "../../lib/ShellStateProvider";
 import { trpc } from "../../lib/trpc";
 
 export default function CompletedPage() {
   const utils = trpc.useUtils();
+  const { select } = useShellState();
   const actionsQuery = trpc.actions.list.useQuery({ status: "completed" });
   const invalidateActions = () => utils.actions.list.invalidate({ status: "completed" });
-
-  const [editingActionId, setEditingActionId] = useState<string | null>(null);
-  const editingAction = actionsQuery.data?.find((action) => action.id === editingActionId);
 
   return (
     <main className="inbox">
@@ -29,23 +25,11 @@ export default function CompletedPage() {
           <ActionRow
             key={action.id}
             action={action}
-            onEdit={setEditingActionId}
+            onEdit={(id) => select({ type: "action", id })}
             onChanged={invalidateActions}
           />
         ))}
       </ul>
-
-      {editingAction && (
-        <Modal title="Edit action" onClose={() => setEditingActionId(null)}>
-          <ActionEditForm
-            action={editingAction}
-            onSaved={() => {
-              invalidateActions();
-              setEditingActionId(null);
-            }}
-          />
-        </Modal>
-      )}
     </main>
   );
 }

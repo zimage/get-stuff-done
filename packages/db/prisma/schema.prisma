@@ -14,6 +14,11 @@ enum ActionStatus {
   dropped
 }
 
+enum ActionType {
+  parallel
+  sequential
+}
+
 enum ProjectStatus {
   active
   on_hold
@@ -87,6 +92,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   refreshTokens   RefreshToken[]
+  apiTokens       ApiToken[]
   ownedProjects   Project[]      @relation("ProjectOwner")
   ownedFolders    Folder[]       @relation("FolderOwner")
   projectShares   ProjectShare[]
@@ -110,6 +116,23 @@ model RefreshToken {
   @@index([userId])
 }
 
+// A long-lived credential a user generates to call the API directly (curl,
+// scripts, Postman) instead of going through the browser Google-login flow.
+// Only tokenHash is ever stored — the raw value is shown once, at creation.
+model ApiToken {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  tokenHash    String    @unique
+  tokenPreview String
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
 model Project {
   id                  String              @id @default(cuid())
   title               String
@@ -117,11 +140,14 @@ model Project {
   type                ProjectType         @default(parallel)
   flagged             Boolean             @default(false)
   deferredDate        DateTime?
+  plannedDate         DateTime?
   dueDate             DateTime?
+  durationMinutes     Int?
   reviewDate          DateTime?
   reviewIntervalCount Int?
   reviewIntervalUnit  ReviewIntervalUnit?
   lastReviewedAt      DateTime?
+  completeWithLastAction Boolean          @default(false)
   note                String?
   folderId            String?
   folder              Folder?             @relation(fields: [folderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -181,7 +207,15 @@ model Action {
   deferredDate   DateTime?
   plannedDate    DateTime?
   dueDate        DateTime?
+  durationMinutes Int?
   sortOrder      Int          @default(0)
+
+  // Govern this action's own children (parallel vs. sequential actionability,
+  // and whether completing the last active child auto-completes this
+  // action) — mirrors Project's type/completeWithLastAction, scoped one
+  // level down to support nested action groups/checklists.
+  type                   ActionType @default(parallel)
+  completeWithLastAction Boolean    @default(false)
 
   repeats                        Boolean               @default(false)
   recurrenceInterval              Int?
@@ -219,6 +253,9 @@ model Tag {
   lat          Float?
   lng          Float?
   geocodedAt   DateTime?
+  parentTagId  String?
+  parentTag    Tag?             @relation("TagParent", fields: [parentTagId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  childTags    Tag[]            @relation("TagParent")
   ownerId      String
   owner        User             @relation(fields: [ownerId], references: [id])
   actions      ActionTag[]
@@ -228,6 +265,7 @@ model Tag {
 
   @@index([ownerId])
   @@index([lat, lng])
+  @@index([parentTagId])
 }
 
 model ActionTag {

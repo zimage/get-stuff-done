@@ -3,6 +3,9 @@ import { z } from "zod";
 export const actionStatusSchema = z.enum(["active", "completed", "dropped"]);
 export type ActionStatusInput = z.infer<typeof actionStatusSchema>;
 
+export const actionTypeSchema = z.enum(["parallel", "sequential"]);
+export type ActionTypeInput = z.infer<typeof actionTypeSchema>;
+
 export const projectStatusSchema = z.enum(["active", "on_hold", "completed", "dropped"]);
 export type ProjectStatusInput = z.infer<typeof projectStatusSchema>;
 

@@ -23,8 +23,8 @@ export const PERSPECTIVES: PerspectiveDef[] = [
   { key: "changed", label: "Changed", href: "/changed" },
 ];
 
-export function getPerspectiveFromPath(pathname: string): PerspectiveKey {
+export function getPerspectiveFromPath(pathname: string): PerspectiveKey | null {
   if (pathname === "/") return "inbox";
   const match = PERSPECTIVES.find((p) => p.key !== "inbox" && pathname.startsWith(p.href));
-  return match?.key ?? "inbox";
+  return match?.key ?? null;
 }

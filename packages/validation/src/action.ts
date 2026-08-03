@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   actionStatusSchema,
+  actionTypeSchema,
   recurrenceBasedOnSchema,
   recurrenceFrequencySchema,
   recurrenceScheduleSchema,
@@ -18,9 +19,13 @@ const actionShape = {
   deferredDate: z.coerce.date().nullable().optional(),
   plannedDate: z.coerce.date().nullable().optional(),
   dueDate: z.coerce.date().nullable().optional(),
+  durationMinutes: z.number().int().positive().nullable().optional(),
   // No default: omitted means "append to the end of its sibling group",
   // computed server-side (see actions.create) rather than always tying at 0.
   sortOrder: z.number().int().optional(),
+  // Govern this action's own children — irrelevant unless it has any.
+  type: actionTypeSchema.default("parallel"),
+  completeWithLastAction: z.boolean().default(false),
   repeats: z.boolean().default(false),
   recurrenceInterval: z.number().int().positive().nullable().optional(),
   recurrenceFrequency: recurrenceFrequencySchema.nullable().optional(),

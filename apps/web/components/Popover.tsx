@@ -7,6 +7,7 @@ export function Popover({
   onOpenChange,
   triggerLabel,
   triggerClassName,
+  triggerTitle,
   align = "start",
   disabled = false,
   children,
@@ -15,6 +16,7 @@ export function Popover({
   onOpenChange?: (open: boolean) => void;
   triggerLabel: ReactNode;
   triggerClassName?: string;
+  triggerTitle?: string;
   align?: "start" | "end";
   disabled?: boolean;
   children: (close: () => void) => ReactNode;
@@ -55,6 +57,7 @@ export function Popover({
         className={triggerClassName}
         onClick={() => setOpen(!open)}
         disabled={disabled}
+        title={triggerTitle}
       >
         {triggerLabel}
       </button>

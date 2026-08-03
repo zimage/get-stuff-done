@@ -7,7 +7,7 @@ import { useShellState } from "../lib/ShellStateProvider";
  * container-list content yet (Forecast/Flagged/Completed/Changed) — a stub,
  * not a placeholder for missing functionality. Every non-Inbox perspective
  * gets a context sidebar; what belongs in these specifically hasn't been
- * spec'd yet.
+ * spec'd yet. View options for these live in the header's popover.
  */
 export function SimpleContextSidebar({ title }: { title: string }) {
   const shell = useShellState();
@@ -15,12 +15,6 @@ export function SimpleContextSidebar({ title }: { title: string }) {
 
   return (
     <div className="context-sidebar">
-      {shell.viewOptionsVisible && (
-        <div className="context-sidebar-view-options">
-          <p className="popover-title">View options</p>
-          <p className="empty-hint">No view options yet for {title}.</p>
-        </div>
-      )}
       <div className="context-sidebar-list">
         <p className="empty-hint">{title}</p>
       </div>

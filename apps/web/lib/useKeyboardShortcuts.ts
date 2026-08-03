@@ -5,10 +5,11 @@ import { useEffect } from "react";
 export interface ShortcutHandlers {
   onToggleSidebar: () => void;
   onToggleViewOptions: () => void;
+  onToggleInspector: () => void;
   onQuickAdd: () => void;
 }
 
-/** Shift+S toggles the sidebars, V toggles view options, C opens quick-add. */
+/** Shift+S toggles the sidebars, V toggles view options, Shift+I toggles the inspector, C opens quick-add. */
 export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -25,6 +26,11 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
         handlers.onToggleSidebar();
         return;
       }
+      if (event.shiftKey && key === "i") {
+        event.preventDefault();
+        handlers.onToggleInspector();
+        return;
+      }
       if (!event.shiftKey && key === "v") {
         event.preventDefault();
         handlers.onToggleViewOptions();
@@ -38,5 +44,5 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handlers.onToggleSidebar, handlers.onToggleViewOptions, handlers.onQuickAdd]);
+  }, [handlers.onToggleSidebar, handlers.onToggleViewOptions, handlers.onToggleInspector, handlers.onQuickAdd]);
 }

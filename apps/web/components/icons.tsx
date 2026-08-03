@@ -48,6 +48,29 @@ export function PaintbrushIcon() {
   );
 }
 
+export function InspectorIcon() {
+  return (
+    <svg {...base}>
+      <circle cx="12" cy="12" r="9" />
+      <g transform="skewX(-12)">
+        <line x1="12" y1="10" x2="12" y2="16" />
+        <circle cx="12" cy="7.3" r="0.9" fill="currentColor" stroke="none" />
+      </g>
+    </svg>
+  );
+}
+
+export function MenuDotsIcon() {
+  return (
+    <svg {...base}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="8.5" cy="12" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="15.5" cy="12" r="1.1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function InboxPlusIcon() {
   return (
     <svg {...base}>
