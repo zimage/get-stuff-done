@@ -114,3 +114,21 @@ Hierarchical pickers (project-in-folder, tag-in-tag) render a "Parent : Child : 
 ### Docker build notes
 
 Both `apps/api/Dockerfile` and `apps/web/Dockerfile` share a BuildKit cache mount (`--mount=type=cache,id=pnpm-store,...`) for pnpm's package store, and a root `.npmrc` sets longer fetch timeouts/retries and `network-concurrency=4` — this workspace has hit npm-registry timeouts on constrained/flaky connections during `pnpm install` inside Docker, and reducing concurrency (not just raising timeouts) is what actually fixed it.
+
+## Future Features
+
+### Microsoft login + multi-provider account linking
+
+Not yet implemented. Today `User.googleSub` (`packages/db/prisma/schema.prisma`) is a unique column directly on `User`, and `auth.loginWithGoogle` (`packages/api/src/router/auth.ts`) upserts on it — the model assumes exactly one identity per user, tied to Google. The plan is to add Microsoft (Entra ID) as a second login provider, with a user able to start an account on either provider and link the other one afterward, so either identity can authenticate the same account going forward.
+
+Since the app has no real users yet (single dev user, no production data — see below), this doesn't need a careful backfill migration; it's a straightforward schema + code change whenever it's picked up.
+
+Shape of the change:
+
+- **Schema**: replace `User.googleSub` with a join table, e.g. `LinkedIdentity { userId, provider ("google" | "microsoft"), providerUserId, email }`, unique on `(provider, providerUserId)`. Neither provider is "primary" — a `User` just has one or more linked identities.
+- **Verifier**: `packages/auth/src/microsoftAuth.ts`, mirroring `googleAuth.ts`'s `verifyGoogleIdToken` — verify a Microsoft/Entra ID `id_token` (JWKS-based, e.g. `jwks-rsa` + `jsonwebtoken`, or `@azure/msal-node`). Needs an Entra ID app registration for a client ID, parallel to `GOOGLE_CLIENT_ID`.
+- **Router** (`packages/api/src/router/auth.ts`): a `loginWithMicrosoft` mutation parallel to `loginWithGoogle`, plus protected `linkGoogle`/`linkMicrosoft` mutations that verify a token and attach that identity to `ctx.user.id` — need a collision policy for when the token's identity is already linked to a different `User`.
+- **Frontend** (`apps/web/lib/AuthProvider.tsx`): a Microsoft sign-in option alongside `GoogleLogin` (e.g. `@azure/msal-react`), and a "linked accounts" section in Settings to link/see the other provider once logged in. New `NEXT_PUBLIC_MICROSOFT_CLIENT_ID` build arg, same pattern as the existing Google one.
+- **Output schema**: `toPublicUser`/`publicUserOutputSchema` currently assume a single identity; will need to expose which providers are linked so Settings can render linked-vs-not state.
+
+This repo is still a pure dev product with a single user — no production data to migrate, so don't over-engineer this for backwards-compat or zero-downtime concerns unless that's changed by the time it's built.
